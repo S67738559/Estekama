@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Register — Al-Estekama School</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<nav class="navbar" id="navbar"></nav>
+
+<div class="auth-wrap">
+  <div class="auth-box">
+    <div class="brand">
+      <div class="ico">ع</div>
+      <h2>Create Account</h2>
+      <p>Join Al-Estekama School Portal</p>
+    </div>
+
+    <div id="err" class="alert alert-red"></div>
+
+    <div class="form-group">
+      <label>Full Name</label>
+      <input type="text" id="name" placeholder="Enter your full name" maxlength="60" autocomplete="name">
+    </div>
+    <div class="form-group">
+      <label>Email Address</label>
+      <input type="email" id="email" placeholder="your@email.com" maxlength="120" autocomplete="email">
+    </div>
+    <div class="form-group">
+      <label>Password</label>
+      <input type="password" id="password" placeholder="At least 6 characters" maxlength="100" autocomplete="new-password">
+    </div>
+    <div class="form-group">
+      <label>Confirm Password</label>
+      <input type="password" id="confirm" placeholder="Repeat your password" maxlength="100" autocomplete="new-password">
+    </div>
+
+    <button class="btn btn-green btn-full" id="btn-register">Create Account</button>
+
+    <div class="auth-switch">Already have an account? <a href="login.html">Sign In</a></div>
+  </div>
+</div>
+
+<script type="module">
+  import { auth, db } from "./firebase.js";
+  import { isValidEmail, fieldError, clearAllErrors, autoClear, renderNavbar } from "./helpers.js";
+  renderNavbar({ variant: "auth" });
+  import { createUserWithEmailAndPassword }
+    from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+  import { doc, setDoc, serverTimestamp }
+    from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+  import { onAuthStateChanged }
+    from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+
+  // Field handles + live error clearing
+  const $name = document.getElementById("name");
+  const $email = document.getElementById("email");
+  const $pass = document.getElementById("password");
+  const $conf = document.getElementById("confirm");
+  autoClear($name, $email, $pass, $conf);
+
+  // Guard: while a registration is in-flight, don't let the auth-state
+  // listener redirect us — that race cancels the Firestore profile write.
+  let registering = false;
+
+  // If already logged in (existing session) → go to departments
+  onAuthStateChanged(auth, user => {
+    if (user && !registering) window.location.href = "departments.html";
+  });
+
+  // this will show a red error banner with your message
+  function showErr(msg) {
+    const el = document.getElementById("err");
+    el.textContent = msg;
+    el.classList.add("show");
+  }
+  // this will hide the red error banner
+  function hideErr() {
+    document.getElementById("err").classList.remove("show");
+  }
+
+  // this will run when you click "Create Account" — it validates the form, creates your Firebase account, and saves your profile to the database
+  document.getElementById("btn-register").addEventListener("click", async () => {
+    hideErr();
+    clearAllErrors();
+    const name     = $name.value.trim();
+    const email    = $email.value.trim();
+    const password = $pass.value;
+    const confirm  = $conf.value;
+
+    // Per-field validation
+    let ok = true;
+    if (!name)                 ok = fieldError($name, "Please enter your full name.");
+    else if (name.length < 2)  ok = fieldError($name, "Name must be at least 2 characters.");
+
+    if (!email)                     ok = fieldError($email, "Please enter your email.");
+    else if (!isValidEmail(email))  ok = fieldError($email, "Please enter a valid email address.");
+
+    if (!password)                  ok = fieldError($pass, "Please enter a password.");
+    else if (password.length < 6)   ok = fieldError($pass, "Password must be at least 6 characters.");
+
+    if (!confirm)                   ok = fieldError($conf, "Please confirm your password.");
+    else if (password !== confirm)  ok = fieldError($conf, "Passwords do not match.");
+
+    if (!ok) return;
+
+    const btn = document.getElementById("btn-register");
+    btn.textContent = "Creating account…";
+    btn.disabled = true;
+    registering = true;            // block the auth-state listener's redirect
+
+    try {
+      // 1. Create the Firebase Auth account
+      const result = await createUserWithEmailAndPassword(auth, email, password);
+      const uid = result.user.uid;
+
+      // 2. Save user info to Firestore (must finish before we navigate away)
+      await setDoc(doc(db, "users", uid), {
+        name:      name,
+        email:     email,
+        role:      "user",          // default role — admin sets this manually
+        createdAt: serverTimestamp()
+      });
+
+      // 3. Redirect to departments page
+      window.location.href = "departments.html";
+
+    } catch (error) {
+      registering = false;
+      btn.textContent = "Create Account";
+      btn.disabled = false;
+
+      // Show friendly error messages
+      const messages = {
+        "auth/email-already-in-use": "This email is already registered. Try signing in.",
+        "auth/invalid-email":        "Please enter a valid email address.",
+        "auth/weak-password":        "Password is too weak. Use at least 6 characters.",
+        "auth/network-request-failed": "Network error. Please check your internet connection."
+      };
+      showErr(messages[error.code] || "Something went wrong: " + error.message);
+    }
+  });
+</script>
+</body>
+</html>

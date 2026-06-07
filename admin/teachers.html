@@ -1,0 +1,415 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Teachers — Admin — Al-Estekama School</title>
+  <link rel="stylesheet" href="../style.css">
+  <style>
+    .preview-wrap { display:flex; align-items:center; gap:12px; margin-top:8px; }
+    .preview-img  { width:64px; height:64px; border-radius:8px; object-fit:cover;
+                    border:2px solid #d0d9e8; display:none; }
+    .preview-ph   { width:64px; height:64px; border-radius:8px; background:#f0f4f8;
+                    border:2px dashed #d0d9e8; display:flex; align-items:center;
+                    justify-content:center; font-size:28px; }
+    .upload-hint  { font-size:12px; color:#aaa; }
+    body{visibility:hidden}
+  </style>
+</head>
+<body>
+
+<nav class="navbar" id="navbar"></nav>
+
+<div class="admin-wrap">
+  <aside class="sidebar">
+    <div class="s-title">Menu</div>
+    <a href="index.html">🏠 Dashboard</a>
+    <a href="departments.html">🏛️ Departments</a>
+    <a href="teachers.html" class="active">👩‍🏫 Teachers</a>
+    <a href="messages.html">✉️ Messages</a>
+  </aside>
+
+  <main class="admin-main">
+    <div class="topbar">
+      <div>
+        <h1>Teachers</h1>
+        <p class="sub">Add, edit and delete teachers</p>
+      </div>
+      <button class="btn btn-orange" id="btn-add">+ Add Teacher</button>
+    </div>
+
+    <div class="tbl-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Photo</th>
+            <th>Name</th>
+            <th>Subject</th>
+            <th>Department</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody id="tbody">
+          <tr><td colspan="5"><div class="spinner"></div></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div id="pager" class="pager"></div>
+  </main>
+</div>
+
+<!-- Add / Edit Modal -->
+<div class="modal-bg" id="modal">
+  <div class="modal-box">
+    <div class="modal-head">
+      <h3 id="modal-title">Add Teacher</h3>
+      <button onclick="closeM()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div id="modal-err" class="alert alert-red"></div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label>Full Name *</label>
+          <input type="text" id="f-name" placeholder="Teacher's name" maxlength="60">
+        </div>
+        <div class="form-group">
+          <label>Subject</label>
+          <input type="text" id="f-subject" placeholder="e.g. Mathematics" maxlength="60">
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label>Department</label>
+        <select id="f-dept">
+          <option value="">— No department —</option>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label>Bio</label>
+        <textarea id="f-bio" rows="3" placeholder="Short biography (optional)" maxlength="500"></textarea>
+      </div>
+
+      <div class="form-group">
+        <label>Profile Photo</label>
+        <input type="file" id="f-photo" accept="image/png, image/jpeg, image/webp">
+        <div class="preview-wrap">
+          <div class="preview-ph" id="ph-placeholder">👤</div>
+          <img  class="preview-img" id="ph-preview" src="" alt="Preview">
+          <span class="upload-hint">JPG or PNG, max 5 MB. Resized &amp; saved automatically. Optional.</span>
+        </div>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-gray" onclick="closeM()">Cancel</button>
+      <button class="btn btn-green" id="btn-save">Save Teacher</button>
+    </div>
+  </div>
+</div>
+
+<!-- Delete Confirm Modal -->
+<div class="modal-bg" id="del-modal">
+  <div class="modal-box" style="max-width:380px">
+    <div class="modal-head">
+      <h3>Delete Teacher</h3>
+      <button onclick="closeDelM()">✕</button>
+    </div>
+    <div class="modal-body">
+      <p style="color:#555;font-size:14px">Are you sure you want to delete <strong id="del-name-label"></strong>?<br>This cannot be undone.</p>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-gray" onclick="closeDelM()">Cancel</button>
+      <button class="btn btn-red"  id="btn-del-confirm">Yes, Delete</button>
+    </div>
+  </div>
+</div>
+
+<script type="module">
+  import { db } from "../firebase.js";
+  import { requireAdmin, setupNav, toast, fieldError, clearFieldError, clearAllErrors, autoClear, pageSlice, renderPager, PER_PAGE, renderNavbar } from "../helpers.js";
+  renderNavbar({ variant: "admin" });
+  import {
+    collection, getDocs, addDoc, doc,
+    updateDoc, deleteDoc, getDoc,
+    serverTimestamp, orderBy, query
+  } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+  let editId      = null;
+  let deleteId    = null;
+  let savedPhoto  = "";      // Keeps existing photo URL when editing
+  let deptMap     = {};      // dept ID → dept name
+  let allTeachers = [];
+  let page        = 1;
+
+  window.closeM    = () => document.getElementById("modal").classList.remove("open");
+  window.closeDelM = () => document.getElementById("del-modal").classList.remove("open");
+
+  requireAdmin(async () => {
+    setupNav();
+    await loadDepts();
+    await loadTeachers();
+
+    // Show photo preview when file is chosen
+    document.getElementById("f-photo").addEventListener("change", e => {
+      const file = e.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = ev => {
+        document.getElementById("ph-preview").src = ev.target.result;
+        document.getElementById("ph-preview").style.display  = "block";
+        document.getElementById("ph-placeholder").style.display = "none";
+      };
+      reader.readAsDataURL(file);
+    });
+
+    // ── Open "Add" modal ──
+    document.getElementById("btn-add").onclick = () => {
+      editId     = null;
+      savedPhoto = "";
+      document.getElementById("modal-title").textContent = "Add Teacher";
+      document.getElementById("f-name").value    = "";
+      document.getElementById("f-subject").value = "";
+      document.getElementById("f-dept").value    = "";
+      document.getElementById("f-bio").value     = "";
+      document.getElementById("f-photo").value   = "";
+      document.getElementById("ph-preview").style.display    = "none";
+      document.getElementById("ph-placeholder").style.display = "flex";
+      document.getElementById("modal-err").classList.remove("show");
+      clearAllErrors(document.getElementById("modal"));
+      document.getElementById("modal").classList.add("open");
+      document.getElementById("f-name").focus();
+    };
+
+    // Live-clear field errors as the admin edits
+    autoClear(
+      document.getElementById("f-name"),
+      document.getElementById("f-subject"),
+      document.getElementById("f-bio"),
+      document.getElementById("f-photo")
+    );
+
+    // ── Save button (add & edit) ──
+    document.getElementById("btn-save").onclick = async () => {
+      const nameEl  = document.getElementById("f-name");
+      const photoEl = document.getElementById("f-photo");
+      const name    = nameEl.value.trim();
+      const subject = document.getElementById("f-subject").value.trim();
+      const deptId  = document.getElementById("f-dept").value;
+      const bio     = document.getElementById("f-bio").value.trim();
+      const file    = photoEl.files[0];
+      const errEl   = document.getElementById("modal-err");
+
+      errEl.classList.remove("show");
+      clearAllErrors(document.getElementById("modal"));
+
+      // Per-field validation
+      let ok = true;
+      if (!name)                ok = fieldError(nameEl, "Please enter the teacher's name.");
+      else if (name.length < 2) ok = fieldError(nameEl, "Name must be at least 2 characters.");
+
+      if (file) {
+        if (!file.type.startsWith("image/"))
+          ok = fieldError(photoEl, "Please choose an image file (JPG, PNG or WebP).");
+        else if (file.size > 5 * 1024 * 1024)
+          ok = fieldError(photoEl, "Photo is too large. Max 5 MB.");
+      }
+      if (!ok) return;
+
+      const btn = document.getElementById("btn-save");
+      btn.textContent = "Saving…";
+      btn.disabled    = true;
+
+      try {
+        // Compress photo to a small base64 image stored directly in Firestore
+        // (no Firebase Storage needed). Resized down to keep the document small.
+        let photoURL = savedPhoto;
+        if (file) {
+          photoURL = await compressImage(file, 400, 0.8);
+        }
+
+        const data = { name, subject, departmentId: deptId, bio, photoURL };
+
+        if (editId) {
+          await updateDoc(doc(db, "teachers", editId), data);
+          toast("Teacher updated ✓", "ok");
+        } else {
+          await addDoc(collection(db, "teachers"), { ...data, createdAt: serverTimestamp() });
+          toast("Teacher added ✓", "ok");
+        }
+
+        window.closeM();
+        await loadTeachers();
+
+      } catch (err) {
+        errEl.textContent = "Error: " + err.message;
+        errEl.classList.add("show");
+      }
+
+      btn.textContent = "Save Teacher";
+      btn.disabled    = false;
+    };
+
+    // ── Delete confirm ──
+    document.getElementById("btn-del-confirm").onclick = async () => {
+      if (!deleteId) return;
+      try {
+        await deleteDoc(doc(db, "teachers", deleteId));
+        toast("Teacher deleted", "ok");
+        window.closeDelM();
+        await loadTeachers();
+      } catch (err) {
+        toast("Error: " + err.message, "err");
+      }
+    };
+  });
+
+  // ── Load departments into the <select> ──
+  // this will fetch every department and fill the dropdown in the Add/Edit form
+  async function loadDepts() {
+    const snap = await getDocs(query(collection(db, "departments"), orderBy("name")));
+    const sel  = document.getElementById("f-dept");
+    sel.innerHTML = '<option value="">— No department —</option>';
+    deptMap = {};
+    snap.forEach(d => {
+      deptMap[d.id] = d.data().name;
+      sel.innerHTML += `<option value="${d.id}">${d.data().name}</option>`;
+    });
+  }
+
+  // ── Load teachers from Firestore ──
+  // this will fetch every teacher from the database and show them in the table
+  async function loadTeachers() {
+    const tbody = document.getElementById("tbody");
+    tbody.innerHTML = '<tr><td colspan="5"><div class="spinner"></div></td></tr>';
+
+    try {
+      const snap = await getDocs(query(collection(db, "teachers"), orderBy("name")));
+      allTeachers = [];
+      snap.forEach(d => allTeachers.push({ id: d.id, ...d.data() }));
+
+      // Stay on a valid page after deletes
+      const pages = Math.max(1, Math.ceil(allTeachers.length / PER_PAGE));
+      if (page > pages) page = pages;
+
+      renderTeachersPage();
+    } catch (err) {
+      tbody.innerHTML = `<tr><td colspan="5" style="color:#e74c3c;padding:20px">Error: ${err.message}</td></tr>`;
+    }
+  }
+
+  // ── Render the current page of the teachers table ──
+  // this will draw one page of the teachers table plus the page buttons
+  function renderTeachersPage() {
+    const tbody = document.getElementById("tbody");
+    const pager = document.getElementById("pager");
+
+    if (allTeachers.length === 0) {
+      tbody.innerHTML = `<tr><td colspan="5"><div class="empty"><span class="ico">👩‍🏫</span>No teachers yet. Click "Add Teacher" to get started.</div></td></tr>`;
+      pager.innerHTML = "";
+      return;
+    }
+
+    tbody.innerHTML = "";
+
+    pageSlice(allTeachers, page).forEach(t => {
+      const photoCell = t.photoURL
+        ? `<img src="${t.photoURL}" style="width:42px;height:42px;border-radius:8px;object-fit:cover">`
+        : `<div style="width:42px;height:42px;border-radius:8px;background:#f0f4f8;display:flex;align-items:center;justify-content:center;font-size:22px">👤</div>`;
+
+      const deptName = deptMap[t.departmentId] || "—";
+
+      const tr = document.createElement("tr");
+      tr.innerHTML = `
+        <td>${photoCell}</td>
+        <td><strong>${t.name}</strong></td>
+        <td style="color:#666">${t.subject || "—"}</td>
+        <td><span style="background:#e8f5e9;color:#1b5e20;padding:2px 10px;border-radius:20px;font-size:12px;font-weight:700">${deptName}</span></td>
+        <td>
+          <div class="td-actions">
+            <button class="btn btn-gray btn-sm" data-id="${t.id}" data-action="edit">✏️ Edit</button>
+            <button class="btn btn-red  btn-sm" data-id="${t.id}" data-action="delete" data-name="${esc(t.name)}">🗑️ Delete</button>
+          </div>
+        </td>
+      `;
+      tbody.appendChild(tr);
+    });
+
+    renderPager(pager, allTeachers.length, page, p => { page = p; renderTeachersPage(); });
+
+    // Event delegation for edit / delete
+    tbody.onclick = async e => {
+        const btn = e.target.closest("[data-action]");
+        if (!btn) return;
+
+        if (btn.dataset.action === "edit") {
+          // Load the teacher's data and fill the form
+          const snap = await getDoc(doc(db, "teachers", btn.dataset.id));
+          if (!snap.exists()) return;
+          const t = snap.data();
+
+          editId     = btn.dataset.id;
+          savedPhoto = t.photoURL || "";
+
+          document.getElementById("modal-title").textContent = "Edit Teacher";
+          document.getElementById("f-name").value    = t.name     || "";
+          document.getElementById("f-subject").value = t.subject  || "";
+          document.getElementById("f-dept").value    = t.departmentId || "";
+          document.getElementById("f-bio").value     = t.bio      || "";
+          document.getElementById("f-photo").value   = "";
+
+          if (t.photoURL) {
+            document.getElementById("ph-preview").src = t.photoURL;
+            document.getElementById("ph-preview").style.display    = "block";
+            document.getElementById("ph-placeholder").style.display = "none";
+          } else {
+            document.getElementById("ph-preview").style.display    = "none";
+            document.getElementById("ph-placeholder").style.display = "flex";
+          }
+
+          document.getElementById("modal-err").classList.remove("show");
+          clearAllErrors(document.getElementById("modal"));
+          document.getElementById("modal").classList.add("open");
+        }
+
+        if (btn.dataset.action === "delete") {
+          deleteId = btn.dataset.id;
+          document.getElementById("del-name-label").textContent = btn.dataset.name;
+          document.getElementById("del-modal").classList.add("open");
+        }
+      };
+  }
+
+  // this will escape quotes so a string is safe to put inside an HTML attribute
+  function esc(s) { return (s || "").replace(/"/g, "&quot;").replace(/'/g, "&#39;"); }
+
+  // Read an image file, scale it so its longest side is `max` px, and return
+  // a JPEG data URL. This keeps the stored string small enough for Firestore
+  // (well under the 1 MB document limit) — no Firebase Storage required.
+  // this will shrink a photo and turn it into text so it can be saved in the database
+  function compressImage(file, max, quality) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onerror = () => reject(new Error("Could not read the image file."));
+      reader.onload = () => {
+        const img = new Image();
+        img.onerror = () => reject(new Error("That file is not a valid image."));
+        img.onload = () => {
+          let { width, height } = img;
+          if (width > height && width > max) { height = Math.round(height * max / width); width = max; }
+          else if (height > max)            { width  = Math.round(width  * max / height); height = max; }
+
+          const canvas  = document.createElement("canvas");
+          canvas.width  = width;
+          canvas.height = height;
+          canvas.getContext("2d").drawImage(img, 0, 0, width, height);
+          resolve(canvas.toDataURL("image/jpeg", quality));
+        };
+        img.src = reader.result;
+      };
+      reader.readAsDataURL(file);
+    });
+  }
+</script>
+</body>
+</html>

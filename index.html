@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Al-Estekama School</title>
+  <link rel="stylesheet" href="style.css">
+  <style>
+    .hero {
+      background: linear-gradient(135deg, #0a2e0a 0%, #1b5e20 100%);
+      color: white;
+      padding: 70px 24px;
+      text-align: center;
+    }
+    .hero h1 { font-size: 34px; font-weight: 700; margin-bottom: 12px; }
+    .hero p  { font-size: 16px; opacity: 0.85; margin-bottom: 28px; }
+    .hero-btns { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+    .boxes {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+      gap: 16px;
+      margin-top: 10px;
+    }
+    .box {
+      background: white;
+      border-radius: 12px;
+      padding: 24px 20px;
+      text-align: center;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+    }
+    .box .ico { font-size: 36px; margin-bottom: 10px; display: block; }
+    .box h3   { font-size: 15px; font-weight: 700; margin-bottom: 6px; }
+    .box p    { font-size: 13px; color: #777; line-height: 1.6; }
+    .blue-strip {
+      background: #1b5e20;
+      color: white;
+      text-align: center;
+      padding: 32px 20px;
+      margin: 32px 0;
+      border-radius: 12px;
+    }
+    .blue-strip h2 { font-size: 22px; margin-bottom: 8px; }
+    .blue-strip p  { font-size: 14px; opacity: 0.85; margin-bottom: 20px; }
+  </style>
+</head>
+<body>
+
+<nav class="navbar" id="navbar"></nav>
+
+<div class="hero">
+  <h1>Welcome to Al-Estekama School 🎓</h1>
+  <p>A place where every student grows, learns, and shines.</p>
+  <div class="hero-btns">
+    <a href="about.html" class="btn btn-gray" style="color:#333">Learn More</a>
+  </div>
+</div>
+
+<div class="content">
+  <div class="boxes">
+    <div class="box"><span class="ico">📚</span><h3>Great Curriculum</h3><p>A balanced program covering all key subjects for a strong foundation.</p></div>
+    <div class="box"><span class="ico">👩‍🏫</span><h3>Expert Teachers</h3><p>Dedicated and experienced teachers who care about every student.</p></div>
+    <div class="box"><span class="ico">🔬</span><h3>Modern Labs</h3><p>Well-equipped science, computer and language labs for hands-on learning.</p></div>
+    <div class="box"><span class="ico">🤝</span><h3>Strong Community</h3><p>We work closely with parents and families to support every child.</p></div>
+    <div class="box"><span class="ico">🏆</span><h3>Proven Results</h3><p>Consistent high achievement and proud graduates year after year.</p></div>
+    <div class="box"><span class="ico">🌱</span><h3>Character Building</h3><p>We grow not just minds but also values, confidence and responsibility.</p></div>
+  </div>
+</div>
+
+<footer>© 2025 Al-Estekama School. All rights reserved.</footer>
+
+<script type="module">
+  import { auth } from "./firebase.js";
+  import { renderNavbar, getRole } from "./helpers.js";
+  import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+
+  renderNavbar({ variant: "landing" });
+
+  // This landing page is for visitors only. Once signed in, send the user
+  // to their area so they don't see the welcome page again.
+  onAuthStateChanged(auth, async user => {
+    if (!user) return;
+    const role = await getRole(user.uid);
+    window.location.href = role === "admin" ? "admin/index.html" : "departments.html";
+  });
+</script>
+</body>
+</html>

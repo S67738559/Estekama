@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Department — Al-Estekama School</title>
+  <link rel="stylesheet" href="style.css">
+  <style>body{visibility:hidden}</style>
+</head>
+<body>
+
+<nav class="navbar" id="navbar"></nav>
+
+<div class="page-header">
+  <h1 id="dept-name">Loading…</h1>
+  <p id="dept-desc"></p>
+</div>
+
+<div class="content">
+  <a href="departments.html" class="btn btn-gray btn-sm" style="margin-bottom:18px">← Back to Departments</a>
+
+  <h2 style="font-size:18px;font-weight:700;color:#1b5e20;margin-bottom:14px">Teachers in this department</h2>
+
+  <div id="grid" class="grid">
+    <div class="spinner"></div>
+  </div>
+  <div id="pager" class="pager"></div>
+</div>
+
+<footer>© 2025 Al-Estekama School. All rights reserved.</footer>
+
+<script type="module">
+  import { db } from "./firebase.js";
+  import { requireLogin, setupNav, renderNavbar, showEmpty, pageSlice, renderPager } from "./helpers.js";
+  import { doc, getDoc, collection, getDocs, query, where }
+    from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+  renderNavbar();
+
+  const deptId = new URLSearchParams(location.search).get("id");
+  let teachers = [];
+  let page     = 1;
+
+  requireLogin(async () => {
+    setupNav();
+
+    const grid  = document.getElementById("grid");
+    const nameEl = document.getElementById("dept-name");
+    const descEl = document.getElementById("dept-desc");
+
+    if (!deptId) {
+      nameEl.textContent = "Department not found";
+      descEl.textContent = "No department was specified.";
+      grid.innerHTML = "";
+      return;
+    }
+
+    try {
+      // 1) Load this department's info
+      const snap = await getDoc(doc(db, "departments", deptId));
+      if (!snap.exists()) {
+        nameEl.textContent = "Department not found";
+        descEl.textContent = "This department may have been removed.";
+        document.title = "Department not found — Al-Estekama School";
+        grid.innerHTML = "";
+        return;
+      }
+      const dept = snap.data();
+      nameEl.textContent = dept.name;
+      descEl.textContent = dept.description || "";
+      document.title = dept.name + " — Al-Estekama School";
+
+      // 2) Load ONLY the teachers under this department
+      const tSnap = await getDocs(
+        query(collection(db, "teachers"), where("departmentId", "==", deptId))
+      );
+      teachers = [];
+      tSnap.forEach(d => teachers.push({ id: d.id, ...d.data() }));
+      teachers.sort((a, b) => (a.name || "").localeCompare(b.name || ""));
+
+      renderPage();
+
+    } catch (err) {
+      grid.innerHTML = `<div class="alert alert-red show">Error: ${err.message}</div>`;
+    }
+  });
+
+  // this will draw one page of the teachers belonging to this department
+  function renderPage() {
+    const grid  = document.getElementById("grid");
+    const pager = document.getElementById("pager");
+
+    if (teachers.length === 0) {
+      showEmpty(grid, "No teachers in this department yet.");
+      pager.innerHTML = "";
+      return;
+    }
+
+    grid.innerHTML = "";
+    pageSlice(teachers, page).forEach(t => {
+      const card = document.createElement("div");
+      card.className = "item-card";
+
+      const photoHTML = t.photoURL
+        ? `<div class="teacher-photo"><img src="${t.photoURL}" alt="${t.name}"></div>`
+        : `<div class="teacher-photo">👤</div>`;
+
+      card.innerHTML = `
+        ${photoHTML}
+        <div class="card-body">
+          <h3>${t.name}</h3>
+          ${t.subject ? `<p style="color:#e67e22;font-weight:700;font-size:13px;margin-bottom:6px">${t.subject}</p>` : ""}
+          <p>${t.bio || ""}</p>
+        </div>
+      `;
+      grid.appendChild(card);
+    });
+
+    renderPager(pager, teachers.length, page, p => {
+      page = p;
+      renderPage();
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    });
+  }
+</script>
+</body>
+</html>

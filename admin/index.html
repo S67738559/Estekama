@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Admin Dashboard — Al-Estekama School</title>
+  <link rel="stylesheet" href="../style.css">
+  <style>body{visibility:hidden}</style>
+</head>
+<body>
+
+<nav class="navbar" id="navbar"></nav>
+
+<div class="admin-wrap">
+
+  <aside class="sidebar">
+    <div class="s-title">Menu</div>
+    <a href="index.html" class="active">🏠 Dashboard</a>
+    <a href="departments.html">🏛️ Departments</a>
+    <a href="teachers.html">👩‍🏫 Teachers</a>
+    <a href="messages.html">✉️ Messages</a>
+  </aside>
+
+  <main class="admin-main">
+    <h1>Dashboard</h1>
+    <p class="sub">Overview of Al-Estekama School</p>
+
+    <div class="stat-row">
+      <div class="stat-card">
+        <div class="num" id="n-depts">…</div>
+        <div class="lbl">Departments</div>
+      </div>
+      <div class="stat-card">
+        <div class="num" id="n-teachers">…</div>
+        <div class="lbl">Teachers</div>
+      </div>
+      <div class="stat-card">
+        <div class="num" id="n-users">…</div>
+        <div class="lbl">Users</div>
+      </div>
+      <div class="stat-card">
+        <div class="num" id="n-msgs">…</div>
+        <div class="lbl">Messages</div>
+      </div>
+    </div>
+
+    <div style="display:flex;gap:12px;flex-wrap:wrap">
+      <a href="departments.html" class="btn btn-green">Manage Departments</a>
+      <a href="teachers.html"    class="btn btn-green">Manage Teachers</a>
+      <a href="messages.html"    class="btn btn-gray" style="color:#333">View Messages</a>
+    </div>
+  </main>
+
+</div>
+
+<script type="module">
+  import { db } from "../firebase.js";
+  import { requireAdmin, setupNav, renderNavbar } from "../helpers.js";
+  renderNavbar({ variant: "admin" });
+  import { collection, getCountFromServer }
+    from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+  requireAdmin(async () => {
+    setupNav();
+
+    // Load counts for the 4 stat cards
+    const pairs = [
+      ["n-depts",    "departments"],
+      ["n-teachers", "teachers"],
+      ["n-users",    "users"],
+      ["n-msgs",     "contact_messages"],
+    ];
+
+    for (const [elId, colName] of pairs) {
+      try {
+        const result = await getCountFromServer(collection(db, colName));
+        document.getElementById(elId).textContent = result.data().count;
+      } catch {
+        document.getElementById(elId).textContent = "—";
+      }
+    }
+  });
+</script>
+</body>
+</html>

@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>About Us — Al-Estekama School</title>
+  <link rel="stylesheet" href="style.css">
+  <style>
+    .about-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 28px;
+      align-items: start;
+      margin-bottom: 24px;
+    }
+    @media(max-width:650px){ .about-grid { grid-template-columns:1fr; } }
+    .about-img {
+      background: linear-gradient(135deg,#1b5e20,#2e7d32);
+      border-radius: 14px;
+      height: 260px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 80px;
+    }
+    .about-text p { color: #555; font-size: 14.5px; line-height: 1.8; margin-bottom: 12px; }
+    .values {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(180px,1fr));
+      gap: 14px;
+      margin-top: 10px;
+    }
+    .val-box {
+      background: white;
+      border-radius: 10px;
+      padding: 20px 16px;
+      text-align: center;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+    }
+    .val-box .ico { font-size: 28px; margin-bottom: 8px; display: block; }
+    .val-box h4   { font-size: 14px; font-weight: 700; margin-bottom: 5px; }
+    .val-box p    { font-size: 12.5px; color: #777; line-height: 1.5; }
+    .mv-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-bottom: 20px; }
+    @media(max-width:550px){ .mv-grid { grid-template-columns:1fr; } }
+    .mv-box { background: #1b5e20; color: white; border-radius: 12px; padding: 24px; }
+    .mv-box h3 { font-size: 16px; font-weight: 700; margin-bottom: 8px; color: #ffd07a; }
+    .mv-box p  { font-size: 13.5px; line-height: 1.7; opacity: 0.9; }
+  </style>
+</head>
+<body>
+
+<nav class="navbar" id="navbar"></nav>
+
+<div class="page-header">
+  <h1>About Al-Estekama School</h1>
+  <p>Dedicated to excellence in education and shaping the leaders of tomorrow</p>
+</div>
+
+<div class="content">
+
+  <div class="card" style="margin-bottom:20px">
+    <div class="about-grid">
+      <div class="about-img">🏫</div>
+      <div class="about-text">
+        <h2 style="font-size:20px;font-weight:700;color:#1b5e20;margin-bottom:12px">Our Story</h2>
+        <p>Al-Estekama School was founded with a simple but powerful mission: to give every student the best possible start in life through quality education and strong values.</p>
+        <p>The name "الاستقامة" means integrity and steadfastness — qualities that sit at the heart of everything we do every single day.</p>
+        <p>We have grown into a vibrant school community, proud of our students' achievements and committed to their futures.</p>
+        <a href="contact.html" class="btn btn-green" style="margin-top:8px">Contact Us</a>
+      </div>
+    </div>
+  </div>
+
+  <div class="mv-grid">
+    <div class="mv-box">
+      <h3>Our Mission</h3>
+      <p>To deliver an inspiring and inclusive education that develops every student intellectually, morally, and socially — empowering them to reach their full potential.</p>
+    </div>
+    <div class="mv-box">
+      <h3>Our Vision</h3>
+      <p>To be recognised as a leading school where academic achievement and strong character go hand in hand, and every graduate is truly prepared for life.</p>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Our Core Values</h2>
+    <div class="values">
+      <div class="val-box"><span class="ico">⭐</span><h4>Excellence</h4><p>We always aim for the highest standards.</p></div>
+      <div class="val-box"><span class="ico">🤲</span><h4>Integrity</h4><p>Honesty and ethics in everything we do.</p></div>
+      <div class="val-box"><span class="ico">🌍</span><h4>Respect</h4><p>Every person deserves dignity and kindness.</p></div>
+      <div class="val-box"><span class="ico">💡</span><h4>Innovation</h4><p>Embracing new ideas and better ways to learn.</p></div>
+      <div class="val-box"><span class="ico">🤝</span><h4>Community</h4><p>Building strong bonds between all of us.</p></div>
+      <div class="val-box"><span class="ico">🌱</span><h4>Growth</h4><p>Every challenge is a chance to improve.</p></div>
+    </div>
+  </div>
+
+</div>
+
+<footer>© 2025 Al-Estekama School. All rights reserved.</footer>
+
+<script type="module">
+  import { setupNav, renderNavbar } from "./helpers.js";
+  renderNavbar({ active: "about" });
+  setupNav();
+</script>
+</body>
+</html>

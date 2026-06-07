@@ -1,0 +1,9 @@
+{
+  "name": "alestekama-school",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Al-Estekama School website (static site, runs on a local server)",
+  "scripts": {
+    "start": "npx --yes serve -l 8000"
+  }
+}

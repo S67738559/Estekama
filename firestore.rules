@@ -1,0 +1,39 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isLoggedIn() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return request.auth != null
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+
+    // Each user can read/create their own doc; admin can do everything
+    match /users/{uid} {
+      allow read:   if request.auth.uid == uid || isAdmin();
+      allow create: if request.auth.uid == uid;
+      allow update, delete: if isAdmin();
+    }
+
+    // Departments: logged-in users read, only admin writes
+    match /departments/{id} {
+      allow read:  if isLoggedIn();
+      allow write: if isAdmin();
+    }
+
+    // Teachers: logged-in users read, only admin writes
+    match /teachers/{id} {
+      allow read:  if isLoggedIn();
+      allow write: if isAdmin();
+    }
+
+    // Contact messages: logged-in users can submit, only admin can read
+    match /contact_messages/{id} {
+      allow create: if isLoggedIn();
+      allow read, update, delete: if isAdmin();
+    }
+  }
+}

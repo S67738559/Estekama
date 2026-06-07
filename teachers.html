@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Teachers — Al-Estekama School</title>
+  <link rel="stylesheet" href="style.css">
+  <style>body{visibility:hidden}</style>
+</head>
+<body>
+
+<nav class="navbar" id="navbar"></nav>
+
+<div class="page-header">
+  <h1>Our Teachers</h1>
+  <p>Meet the dedicated educators who inspire students every day</p>
+</div>
+
+<div class="content">
+  <!-- Department filter buttons -->
+  <div id="filters" class="filters">
+    <button class="filter-btn active" data-dept="all">All</button>
+  </div>
+
+  <!-- Teacher cards -->
+  <div id="grid" class="grid">
+    <div class="spinner"></div>
+  </div>
+  <div id="pager" class="pager"></div>
+</div>
+
+<footer>© 2025 Al-Estekama School. All rights reserved.</footer>
+
+<script type="module">
+  import { db } from "./firebase.js";
+  import { requireLogin, setupNav, showEmpty, pageSlice, renderPager, renderNavbar } from "./helpers.js";
+  import { collection, getDocs, query, orderBy }
+    from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+  let allTeachers = [];
+  let deptNames   = {};
+  let currentDept = "all";
+  let page        = 1;
+
+  renderNavbar({ active: "teachers" });
+
+  requireLogin(async () => {
+    setupNav();
+
+    const grid    = document.getElementById("grid");
+    const filters = document.getElementById("filters");
+
+    // 1. Load departments for filter buttons
+    const deptSnap = await getDocs(query(collection(db, "departments"), orderBy("name")));
+    deptSnap.forEach(d => {
+      deptNames[d.id] = d.data().name;
+      const btn = document.createElement("button");
+      btn.className    = "filter-btn";
+      btn.dataset.dept = d.id;
+      btn.textContent  = d.data().name;
+      filters.appendChild(btn);
+    });
+
+    // 2. Load all teachers
+    try {
+      const snap = await getDocs(query(collection(db, "teachers"), orderBy("name")));
+      allTeachers = [];
+      snap.forEach(d => allTeachers.push({ id: d.id, ...d.data() }));
+      render("all");
+    } catch (err) {
+      grid.innerHTML = `<div class="alert alert-red show">Error: ${err.message}</div>`;
+    }
+
+    // 3. Filter click
+    filters.addEventListener("click", e => {
+      const btn = e.target.closest(".filter-btn");
+      if (!btn) return;
+      filters.querySelectorAll(".filter-btn").forEach(b => b.classList.remove("active"));
+      btn.classList.add("active");
+      render(btn.dataset.dept);
+    });
+
+    // 4. If URL has ?dept=xxx, pre-select that filter
+    const urlDept = new URLSearchParams(location.search).get("dept");
+    if (urlDept) {
+      const btn = filters.querySelector(`[data-dept="${urlDept}"]`);
+      if (btn) {
+        filters.querySelectorAll(".filter-btn").forEach(b => b.classList.remove("active"));
+        btn.classList.add("active");
+        render(urlDept);
+      }
+    }
+  });
+
+  // Switching department filter resets to the first page
+  // this will switch the filter to the chosen department and jump back to page 1
+  function render(deptId) {
+    currentDept = deptId;
+    page = 1;
+    renderPage();
+  }
+
+  // this will draw one page of the teacher cards based on the current filter
+  function renderPage() {
+    const grid  = document.getElementById("grid");
+    const pager = document.getElementById("pager");
+    const list  = currentDept === "all"
+      ? allTeachers
+      : allTeachers.filter(t => t.departmentId === currentDept);
+
+    if (list.length === 0) {
+      showEmpty(grid, "No teachers found for this department.");
+      pager.innerHTML = "";
+      return;
+    }
+
+    grid.innerHTML = "";
+
+    pageSlice(list, page).forEach(t => {
+      const deptLabel = deptNames[t.departmentId] || "";
+      const card = document.createElement("div");
+      card.className = "item-card";
+
+      const photoHTML = t.photoURL
+        ? `<div class="teacher-photo"><img src="${t.photoURL}" alt="${t.name}"></div>`
+        : `<div class="teacher-photo">👤</div>`;
+
+      card.innerHTML = `
+        ${photoHTML}
+        <div class="card-body">
+          ${deptLabel ? `<span class="tag">${deptLabel}</span>` : ""}
+          <h3>${t.name}</h3>
+          ${t.subject ? `<p style="color:#e67e22;font-weight:700;font-size:13px;margin-bottom:6px">${t.subject}</p>` : ""}
+          <p>${t.bio || ""}</p>
+        </div>
+      `;
+      grid.appendChild(card);
+    });
+
+    renderPager(pager, list.length, page, p => {
+      page = p;
+      renderPage();
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    });
+  }
+</script>
+</body>
+</html>

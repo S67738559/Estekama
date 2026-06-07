@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Messages — Admin — Al-Estekama School</title>
+  <link rel="stylesheet" href="../style.css">
+  <style>
+    .filters    { display:flex; gap:8px; margin:0 0 18px; flex-wrap:wrap; }
+    .filter-count { opacity:0.65; font-weight:700; margin-left:2px; }
+    .msg-row    { cursor:pointer; transition:background 0.15s; }
+    .msg-row:hover { background:#f5f8fc; }
+    .msg-row.unread td { font-weight:700; color:#1c2a3a; }
+    .badge-new  { display:inline-flex; align-items:center; background:#e8f5e9; color:#1b5e20;
+                  padding:3px 11px; border-radius:20px; font-size:11px; font-weight:700; }
+    .badge-open { background:#eef1f5; color:#8a96a3; padding:3px 11px; border-radius:20px;
+                  font-size:11px; font-weight:700; }
+    .dot        { width:7px; height:7px; border-radius:50%; background:#1b5e20; margin-right:6px; }
+    .msg-meta   { font-size:13px; color:#777; margin-bottom:4px; }
+    .msg-full   { white-space:pre-wrap; word-break:break-word; color:#333; font-size:14px;
+                  line-height:1.6; background:#f7f9fc; border:1px solid #e6ecf3;
+                  border-radius:8px; padding:14px; margin-top:10px;
+                  min-height:120px; max-height:300px; overflow-y:auto; }
+    body{visibility:hidden}
+  </style>
+</head>
+<body>
+
+<nav class="navbar" id="navbar"></nav>
+
+<div class="admin-wrap">
+  <aside class="sidebar">
+    <div class="s-title">Menu</div>
+    <a href="index.html">🏠 Dashboard</a>
+    <a href="departments.html">🏛️ Departments</a>
+    <a href="teachers.html">👩‍🏫 Teachers</a>
+    <a href="messages.html" class="active">✉️ Messages</a>
+  </aside>
+
+  <main class="admin-main">
+    <h1>Contact Messages</h1>
+    <p class="sub">Click any message to read it in full. New messages are shown in bold.</p>
+
+    <div class="filters" id="filters">
+      <button class="filter-btn active" data-filter="all">All <span class="filter-count" id="c-all"></span></button>
+      <button class="filter-btn" data-filter="new">New <span class="filter-count" id="c-new"></span></button>
+      <button class="filter-btn" data-filter="opened">Opened <span class="filter-count" id="c-opened"></span></button>
+    </div>
+
+    <div class="tbl-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Status</th>
+            <th>Date</th>
+            <th>Name</th>
+            <th>Email</th>
+            <th>Message</th>
+          </tr>
+        </thead>
+        <tbody id="tbody">
+          <tr><td colspan="5"><div class="spinner"></div></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div id="pager" class="pager"></div>
+  </main>
+</div>
+
+<!-- Read Message Modal -->
+<div class="modal-bg" id="msg-modal">
+  <div class="modal-box">
+    <div class="modal-head">
+      <h3 id="m-name">Message</h3>
+      <button onclick="closeMsg()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="msg-meta">From: <a id="m-email" href="#" style="color:#1b5e20;font-weight:600"></a></div>
+      <div class="msg-meta" id="m-date"></div>
+      <div class="msg-full" id="m-body"></div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-gray" onclick="closeMsg()">Close</button>
+    </div>
+  </div>
+</div>
+
+<script type="module">
+  import { db } from "../firebase.js";
+  import { requireAdmin, setupNav, pageSlice, renderPager, PER_PAGE, renderNavbar } from "../helpers.js";
+  renderNavbar({ variant: "admin" });
+  import { collection, getDocs, query, orderBy, doc, updateDoc }
+    from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+  let allMsgs = [];      // every message, newest first
+  let filter  = "all";   // "all" | "new" | "opened"
+  let page    = 1;
+
+  window.closeMsg = () => document.getElementById("msg-modal").classList.remove("open");
+
+  requireAdmin(async () => {
+    setupNav();
+    const tbody = document.getElementById("tbody");
+
+    // Filter button clicks
+    document.getElementById("filters").addEventListener("click", e => {
+      const btn = e.target.closest(".filter-btn");
+      if (!btn) return;
+      document.querySelectorAll("#filters .filter-btn").forEach(b => b.classList.remove("active"));
+      btn.classList.add("active");
+      filter = btn.dataset.filter;
+      page   = 1;
+      render();
+    });
+
+    try {
+      const snap = await getDocs(
+        query(collection(db, "contact_messages"), orderBy("sentAt", "desc"))
+      );
+      allMsgs = [];
+      snap.forEach(d => allMsgs.push({ id: d.id, ...d.data() }));
+      render();
+    } catch (err) {
+      tbody.innerHTML = `<tr><td colspan="5" style="color:#e74c3c;padding:20px">Error: ${err.message}</td></tr>`;
+    }
+  });
+
+  // this will turn the message's timestamp into a readable date + time
+  function fmtDate(m) {
+    if (m.sentAt && m.sentAt.toDate) {
+      return m.sentAt.toDate().toLocaleString("en-GB", {
+        day:"2-digit", month:"short", year:"numeric", hour:"2-digit", minute:"2-digit"
+      });
+    }
+    return "—";
+  }
+
+  // this will refresh the table, the filter counts, and the page buttons
+  function render() {
+    const tbody = document.getElementById("tbody");
+
+    // Live counts on the filter buttons
+    const newCount = allMsgs.filter(m => !m.read).length;
+    document.getElementById("c-all").textContent    = `(${allMsgs.length})`;
+    document.getElementById("c-new").textContent    = `(${newCount})`;
+    document.getElementById("c-opened").textContent = `(${allMsgs.length - newCount})`;
+
+    let list = allMsgs;
+    if (filter === "new")    list = allMsgs.filter(m => !m.read);
+    if (filter === "opened") list = allMsgs.filter(m => m.read);
+
+    const pager = document.getElementById("pager");
+
+    if (list.length === 0) {
+      tbody.innerHTML = `<tr><td colspan="5"><div class="empty"><span class="ico">✉️</span>No messages here.</div></td></tr>`;
+      pager.innerHTML = "";
+      return;
+    }
+
+    // Keep the page in range (e.g. after a message moves out of the "New" filter)
+    const pages = Math.max(1, Math.ceil(list.length / PER_PAGE));
+    if (page > pages) page = pages;
+
+    tbody.innerHTML = "";
+    pageSlice(list, page).forEach(m => {
+      const tr = document.createElement("tr");
+      tr.className   = "msg-row" + (m.read ? "" : " unread");
+      tr.dataset.id  = m.id;
+
+      const status = m.read
+        ? `<span class="badge-open">Opened</span>`
+        : `<span class="badge-new"><span class="dot"></span>New</span>`;
+
+      const oneLine = (m.message || "—").replace(/\s+/g, " ");
+      const preview = esc(oneLine.slice(0, 60)) + (oneLine.length > 60 ? "…" : "");
+
+      tr.innerHTML = `
+        <td>${status}</td>
+        <td style="white-space:nowrap;color:#888;font-size:13px">${fmtDate(m)}</td>
+        <td>${esc(m.name) || "—"}</td>
+        <td><a href="mailto:${esc(m.email)}" style="color:#1b5e20" onclick="event.stopPropagation()">${esc(m.email) || "—"}</a></td>
+        <td style="max-width:340px;color:#555;font-size:13.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${preview}</td>
+      `;
+      tr.onclick = () => openMsg(m.id);
+      tbody.appendChild(tr);
+    });
+
+    renderPager(pager, list.length, page, p => { page = p; render(); });
+  }
+
+  // this will open the message popup and mark it as read in the database
+  async function openMsg(id) {
+    const m = allMsgs.find(x => x.id === id);
+    if (!m) return;
+
+    // Fill and show the modal
+    document.getElementById("m-name").textContent = m.name || "Message";
+    const emailEl = document.getElementById("m-email");
+    emailEl.textContent = m.email || "—";
+    emailEl.href        = "mailto:" + (m.email || "");
+    document.getElementById("m-date").textContent = "Sent: " + fmtDate(m);
+    document.getElementById("m-body").textContent = m.message || "—";
+    document.getElementById("msg-modal").classList.add("open");
+
+    // Mark as read the first time it's opened
+    if (!m.read) {
+      m.read = true;          // optimistic local update
+      render();
+      try {
+        await updateDoc(doc(db, "contact_messages", id), { read: true });
+      } catch (err) {
+        m.read = false;       // revert if the write fails
+        render();
+      }
+    }
+  }
+
+  // this will escape HTML special characters so they're safe to put on the page
+  function esc(s) {
+    return (s || "").replace(/&/g,"&amp;").replace(/</g,"&lt;")
+      .replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#39;");
+  }
+</script>
+</body>
+</html>

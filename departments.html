@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Departments — Al-Estekama School</title>
+  <link rel="stylesheet" href="style.css">
+  <style>body{visibility:hidden}</style>
+</head>
+<body>
+
+<nav class="navbar" id="navbar"></nav>
+
+<div class="page-header">
+  <h1>Our Departments</h1>
+  <p>Explore the academic departments at Al-Estekama School</p>
+</div>
+
+<div class="content">
+  <div id="grid" class="grid">
+    <div class="spinner"></div>
+  </div>
+  <div id="pager" class="pager"></div>
+</div>
+
+<footer>© 2025 Al-Estekama School. All rights reserved.</footer>
+
+<script type="module">
+  import { db } from "./firebase.js";
+  import { requireLogin, setupNav, showEmpty, pageSlice, renderPager, renderNavbar } from "./helpers.js";
+  import { collection, getDocs, query, orderBy }
+    from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+  const icons = ["🏛️","🔬","📐","📖","🎨","💻","🌍","⚽","🎵","🧮","🌿","🔭","📊","🏃","🎭"];
+
+  let allDepts = [];
+  let page     = 1;
+
+  renderNavbar({ active: "departments" });
+
+  requireLogin(async () => {
+    setupNav();
+
+    const grid = document.getElementById("grid");
+
+    try {
+      const snap = await getDocs(query(collection(db, "departments"), orderBy("createdAt", "asc")));
+
+      if (snap.empty) {
+        showEmpty(grid, "No departments added yet. Check back soon!");
+        return;
+      }
+
+      allDepts = [];
+      snap.forEach(docSnap => allDepts.push({ id: docSnap.id, ...docSnap.data() }));
+      renderPage();
+
+    } catch (error) {
+      grid.innerHTML = `<div class="alert alert-red show">Error loading departments: ${error.message}</div>`;
+    }
+  });
+
+  // this will draw one page of the departments grid plus the page buttons
+  function renderPage() {
+    const grid = document.getElementById("grid");
+    grid.innerHTML = "";
+
+    pageSlice(allDepts, page).forEach((d, idx) => {
+      // Keep each department's icon stable regardless of page
+      const absoluteIndex = allDepts.indexOf(d);
+      const icon = icons[absoluteIndex % icons.length];
+
+      const card = document.createElement("div");
+      card.className = "item-card";
+      card.innerHTML = `
+        <div class="card-body">
+          <div style="font-size:38px;margin-bottom:10px">${icon}</div>
+          <h3>${d.name}</h3>
+          <p style="margin-top:6px;margin-bottom:14px">${d.description || "No description provided."}</p>
+          <a href="department.html?id=${d.id}" class="btn btn-green btn-sm">Read More →</a>
+        </div>
+      `;
+      grid.appendChild(card);
+    });
+
+    renderPager(document.getElementById("pager"), allDepts.length, page, p => {
+      page = p;
+      renderPage();
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    });
+  }
+</script>
+</body>
+</html>

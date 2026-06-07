@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Departments — Admin — Al-Estekama School</title>
+  <link rel="stylesheet" href="../style.css">
+  <style>body{visibility:hidden}</style>
+</head>
+<body>
+
+<nav class="navbar" id="navbar"></nav>
+
+<div class="admin-wrap">
+  <aside class="sidebar">
+    <div class="s-title">Menu</div>
+    <a href="index.html">🏠 Dashboard</a>
+    <a href="departments.html" class="active">🏛️ Departments</a>
+    <a href="teachers.html">👩‍🏫 Teachers</a>
+    <a href="messages.html">✉️ Messages</a>
+  </aside>
+
+  <main class="admin-main">
+    <div class="topbar">
+      <div>
+        <h1>Departments</h1>
+        <p class="sub">Add, edit and delete school departments</p>
+      </div>
+      <button class="btn btn-orange" id="btn-add">+ Add Department</button>
+    </div>
+
+    <div class="tbl-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Department Name</th>
+            <th>Description</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody id="tbody">
+          <tr><td colspan="4"><div class="spinner"></div></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div id="pager" class="pager"></div>
+  </main>
+</div>
+
+<!-- Add / Edit Modal -->
+<div class="modal-bg" id="modal">
+  <div class="modal-box">
+    <div class="modal-head">
+      <h3 id="modal-title">Add Department</h3>
+      <button onclick="closeM()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div id="modal-err" class="alert alert-red"></div>
+      <div class="form-group">
+        <label>Department Name *</label>
+        <input type="text" id="f-name" placeholder="e.g. Science Department" maxlength="80">
+      </div>
+      <div class="form-group">
+        <label>Description</label>
+        <textarea id="f-desc" rows="3" placeholder="Short description (optional)" maxlength="300"></textarea>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-gray" onclick="closeM()">Cancel</button>
+      <button class="btn btn-green" id="btn-save">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- Delete Confirm Modal -->
+<div class="modal-bg" id="del-modal">
+  <div class="modal-box" style="max-width:380px">
+    <div class="modal-head">
+      <h3>Delete Department</h3>
+      <button onclick="closeDelM()">✕</button>
+    </div>
+    <div class="modal-body">
+      <p style="color:#555;font-size:14px">Are you sure you want to delete <strong id="del-name-label"></strong>?<br>This cannot be undone.</p>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-gray" onclick="closeDelM()">Cancel</button>
+      <button class="btn btn-red"  id="btn-del-confirm">Yes, Delete</button>
+    </div>
+  </div>
+</div>
+
+<script type="module">
+  import { db } from "../firebase.js";
+  import { requireAdmin, setupNav, toast, fieldError, clearAllErrors, autoClear, pageSlice, renderPager, PER_PAGE, renderNavbar } from "../helpers.js";
+  renderNavbar({ variant: "admin" });
+  import {
+    collection, getDocs, addDoc, doc,
+    updateDoc, deleteDoc, serverTimestamp, orderBy, query
+  } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+  let editId  = null;   // null = adding new, string = editing existing
+  let deleteId = null;
+  let allDepts = [];
+  let page     = 1;
+
+  // Expose close functions globally for onclick attributes
+  window.closeM    = () => document.getElementById("modal").classList.remove("open");
+  window.closeDelM = () => document.getElementById("del-modal").classList.remove("open");
+
+  requireAdmin(async () => {
+    setupNav();
+    await load();
+
+    autoClear(document.getElementById("f-name"), document.getElementById("f-desc"));
+
+    // ── Open "Add" modal ──
+    document.getElementById("btn-add").onclick = () => {
+      editId = null;
+      document.getElementById("modal-title").textContent = "Add Department";
+      document.getElementById("f-name").value = "";
+      document.getElementById("f-desc").value = "";
+      document.getElementById("modal-err").classList.remove("show");
+      clearAllErrors(document.getElementById("modal"));
+      document.getElementById("modal").classList.add("open");
+      document.getElementById("f-name").focus();
+    };
+
+    // ── Save button (handles both add & edit) ──
+    document.getElementById("btn-save").onclick = async () => {
+      const nameEl = document.getElementById("f-name");
+      const name = nameEl.value.trim();
+      const desc = document.getElementById("f-desc").value.trim();
+      const errEl = document.getElementById("modal-err");
+
+      errEl.classList.remove("show");
+      clearAllErrors(document.getElementById("modal"));
+
+      let ok = true;
+      if (!name)                ok = fieldError(nameEl, "Please enter a department name.");
+      else if (name.length < 2) ok = fieldError(nameEl, "Name must be at least 2 characters.");
+      if (!ok) return;
+
+      const btn = document.getElementById("btn-save");
+      btn.textContent = "Saving…";
+      btn.disabled    = true;
+
+      try {
+        if (editId) {
+          // Update existing document
+          await updateDoc(doc(db, "departments", editId), { name, description: desc });
+          toast("Department updated ✓", "ok");
+        } else {
+          // Add new document
+          await addDoc(collection(db, "departments"), {
+            name,
+            description: desc,
+            createdAt:   serverTimestamp()
+          });
+          toast("Department added ✓", "ok");
+        }
+        window.closeM();
+        await load();   // Refresh the table
+      } catch (err) {
+        errEl.textContent = "Error: " + err.message;
+        errEl.classList.add("show");
+      }
+
+      btn.textContent = "Save";
+      btn.disabled    = false;
+    };
+
+    // ── Delete confirm button ──
+    document.getElementById("btn-del-confirm").onclick = async () => {
+      if (!deleteId) return;
+      try {
+        await deleteDoc(doc(db, "departments", deleteId));
+        toast("Department deleted", "ok");
+        window.closeDelM();
+        await load();
+      } catch (err) {
+        toast("Error: " + err.message, "err");
+      }
+    };
+  });
+
+  // ── Load departments from Firestore ──
+  // this will fetch every department from the database and show them in the table
+  async function load() {
+    const tbody = document.getElementById("tbody");
+    tbody.innerHTML = '<tr><td colspan="4"><div class="spinner"></div></td></tr>';
+
+    try {
+      const snap = await getDocs(query(collection(db, "departments"), orderBy("createdAt", "asc")));
+      allDepts = [];
+      snap.forEach(d => allDepts.push({ id: d.id, ...d.data() }));
+
+      // Stay on a valid page after deletes
+      const pages = Math.max(1, Math.ceil(allDepts.length / PER_PAGE));
+      if (page > pages) page = pages;
+
+      renderPage();
+    } catch (err) {
+      tbody.innerHTML = `<tr><td colspan="4" style="color:#e74c3c;padding:20px">Error loading: ${err.message}</td></tr>`;
+    }
+  }
+
+  // ── Render the current page of the departments table ──
+  // this will draw one page of the departments table plus the page buttons
+  function renderPage() {
+    const tbody = document.getElementById("tbody");
+    const pager = document.getElementById("pager");
+
+    if (allDepts.length === 0) {
+      tbody.innerHTML = `<tr><td colspan="4"><div class="empty"><span class="ico">🏛️</span>No departments yet. Click "Add Department" to create one.</div></td></tr>`;
+      pager.innerHTML = "";
+      return;
+    }
+
+    tbody.innerHTML = "";
+    const start = (page - 1) * PER_PAGE;
+
+    pageSlice(allDepts, page).forEach((data, i) => {
+      const tr = document.createElement("tr");
+      tr.innerHTML = `
+        <td style="color:#aaa;font-size:13px">${start + i + 1}</td>
+        <td><strong>${data.name}</strong></td>
+        <td style="color:#666;font-size:13px;max-width:260px">${data.description || "—"}</td>
+        <td>
+          <div class="td-actions">
+            <button class="btn btn-gray btn-sm" data-id="${data.id}" data-action="edit"
+              data-name="${esc(data.name)}" data-desc="${esc(data.description||'')}">
+              ✏️ Edit
+            </button>
+            <button class="btn btn-red btn-sm" data-id="${data.id}" data-action="delete"
+              data-name="${esc(data.name)}">
+              🗑️ Delete
+            </button>
+          </div>
+        </td>
+      `;
+      tbody.appendChild(tr);
+    });
+
+    // Handle Edit / Delete clicks via event delegation
+    tbody.onclick = e => {
+      const btn = e.target.closest("[data-action]");
+      if (!btn) return;
+
+      if (btn.dataset.action === "edit") {
+        editId = btn.dataset.id;
+        document.getElementById("modal-title").textContent = "Edit Department";
+        document.getElementById("f-name").value = btn.dataset.name;
+        document.getElementById("f-desc").value = btn.dataset.desc;
+        document.getElementById("modal-err").classList.remove("show");
+        clearAllErrors(document.getElementById("modal"));
+        document.getElementById("modal").classList.add("open");
+        document.getElementById("f-name").focus();
+      }
+
+      if (btn.dataset.action === "delete") {
+        deleteId = btn.dataset.id;
+        document.getElementById("del-name-label").textContent = btn.dataset.name;
+        document.getElementById("del-modal").classList.add("open");
+      }
+    };
+
+    renderPager(pager, allDepts.length, page, p => { page = p; renderPage(); });
+  }
+
+  // Escape special chars for use in data attributes
+  // this will escape quotes so a string is safe to put inside an HTML attribute
+  function esc(s) { return (s || "").replace(/"/g, "&quot;").replace(/'/g, "&#39;"); }
+</script>
+</body>
+</html>
