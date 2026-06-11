@@ -7,7 +7,7 @@ import { getAuth }       from "https://www.gstatic.com/firebasejs/10.12.2/fireba
 import { getFirestore }  from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
 const firebaseConfig = {
-    apiKey: "AIzaSyAq-RJ6rS2EJPr_qrIUMFggeaGPxmVejp0",
+      apiKey: "AIzaSyAq-RJ6rS2EJPr_qrIUMFggeaGPxmVejp0",
     authDomain: "estekama-school.firebaseapp.com",
     projectId: "estekama-school",
     storageBucket: "estekama-school.firebasestorage.app",
