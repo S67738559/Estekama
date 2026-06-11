@@ -30,3 +30,5 @@
 | `departments` | name, description |
 | `teachers` | name, subject, departmentId, bio, photoURL |
 | `contact_messages` | userId, name, email, message, sentAt |
+C:\Users\Shadha.albadi\Downloads\alestekama_school_v\alestekama_school_v\school2\school2\hero-bg.jpg
+
